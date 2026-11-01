@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PioneerData Inspector | Utica University Data Utility</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        uticaNavy: '#0A2240',
+                        uticaOrange: '#E65300',
+                        uticaSilver: '#A2A9AD',
+                        uticaDark: '#06152A'
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- External Parsers & Charting Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-uticaNavy text-white shadow-md border-b-4 border-uticaOrange">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-uticaOrange text-white p-2.5 rounded-lg shadow font-bold text-xl">
+                    <i class="fa-solid fa-chart-pie"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tight">PioneerData Inspector</h1>
+                    <p class="text-xs text-uticaSilver uppercase tracking-wider font-semibold">Utica University Analytics Tool • 100% Client-Side Privacy</p>
+                </div>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center space-x-3">
+                <button id="loadSampleBtn" class="bg-uticaOrange hover:bg-orange-700 text-white px-4 py-2 rounded text-sm font-semibold transition shadow flex items-center space-x-2">
+                    <i class="fa-solid fa-bolt"></i><span>Load Sample Dataset</span>
+                </button>
+                <button id="resetBtn" class="hidden bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded text-sm font-semibold transition shadow flex items-center space-x-2">
+                    <i class="fa-solid fa-rotate-left"></i><span>New Analysis</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full">
+
+        <!-- Upload & Config Section -->
+        <section id="uploadSection" class="bg-white rounded-xl shadow-lg p-8 border border-gray-200 mb-8 transition-all">
+            <div class="max-w-2xl mx-auto text-center">
+                <h2 class="text-2xl font-bold text-uticaNavy mb-2">Upload Your Dataset</h2>
+                <p class="text-sm text-gray-600 mb-6">Drag & drop your CSV, TSV, JSON, or Excel (.xlsx) file below. All computing occurs locally in your browser; no data ever leaves your device.</p>
+                
+                <div id="dropZone" class="border-2 border-dashed border-gray-300 hover:border-uticaOrange rounded-xl p-8 bg-gray-50 cursor-pointer transition flex flex-col items-center justify-center relative">
+                    <input type="file" id="fileInput" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" accept=".csv,.tsv,.json,.xlsx,.xls">
+                    <i class="fa-solid fa-cloud-arrow-up text-4xl text-uticaOrange mb-3"></i>
+                    <p class="text-base font-medium text-gray-700">Drag & drop file here, or <span class="text-uticaOrange underline">browse</span></p>
+                    <p class="text-xs text-gray-400 mt-1">Supports CSV, TSV, JSON, XLSX</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Config & Controls Bar (Always accessible once dataset is loaded) -->
+        <div id="configBar" class="hidden bg-white rounded-xl shadow p-4 mb-6 border border-gray-200 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-2">
+                <span class="bg-green-100 text-green-800 text-xs font-bold px-2.5 py-1 rounded">Active</span>
+                <span id="datasetMetaLabel" class="text-sm font-medium text-gray-700">Dataset loaded</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-4">
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-600 uppercase">Target Class Column</label>
+                    <select id="targetColumnSelect" class="border border-gray-300 rounded p-1.5 text-xs bg-white focus:ring-2 focus:ring-uticaOrange focus:outline-none">
+                        <option value="">-- None (Unsupervised) --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-gray-600 uppercase">Outlier Method</label>
+                    <select id="outlierMethodSelect" class="border border-gray-300 rounded p-1.5 text-xs bg-white focus:ring-2 focus:ring-uticaOrange focus:outline-none">
+                        <option value="iqr">IQR (1.5 × IQR)</option>
+                        <option value="zscore">Z-Score (±3.0)</option>
+                    </select>
+                </div>
+                <button id="recomputeBtn" class="bg-uticaNavy text-white px-4 py-2 rounded font-bold text-xs hover:bg-blue-900 transition shadow">
+                    Apply Settings
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="hidden flex flex-col items-center justify-center py-16">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-uticaOrange mb-4"></div>
+            <p class="text-uticaNavy font-semibold text-lg" id="loadingText">Processing dataset securely in browser...</p>
+        </div>
+
+        <!-- Report Dashboard -->
+        <div id="reportDashboard" class="hidden space-y-8">
+            
+            <!-- Action Toolbar / Export Options -->
+            <div class="bg-white rounded-lg shadow p-4 flex justify-between items-center border border-gray-200">
+                <span class="text-sm font-bold text-uticaNavy">Analysis Report Generated Successfully</span>
+                <div class="flex space-x-3">
+                    <button id="exportHtmlBtn" class="bg-uticaNavy hover:bg-blue-900 text-white text-xs font-bold px-3 py-2 rounded transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-code"></i><span>Export Full HTML Report</span>
+                    </button>
+                    <button id="exportMarkdownBtn" class="bg-uticaOrange hover:bg-orange-700 text-white text-xs font-bold px-3 py-2 rounded transition flex items-center space-x-1.5">
+                        <i class="fa-solid fa-file-lines"></i><span>Export Markdown</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-gray-200 overflow-x-auto space-x-2 bg-white px-4 pt-2 rounded-t-lg shadow-sm">
+                <button class="tab-btn py-2.5 px-4 font-bold text-sm border-b-2 border-uticaOrange text-uticaNavy whitespace-nowrap" data-target="tabOverview">Overview & Quality</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabColumns">Columns & Dtypes</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabMissing">Missingness</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabDistributions">Distributions</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabOutliers">Outliers</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabCorrelations">Correlations</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabClassBalance">Class Balance</button>
+                <button class="tab-btn py-2.5 px-4 font-medium text-sm text-gray-500 hover:text-uticaNavy whitespace-nowrap" data-target="tabAnomalies">Anomalies & Flags</button>
+            </div>
+
+            <!-- Tab Contents -->
+            <div class="bg-white rounded-b-lg shadow-lg p-6 border border-t-0 border-gray-200">
+                
+                <!-- TAB 1: OVERVIEW -->
+                <div id="tabOverview" class="tab-pane space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Dataset Overview & Summary Metrics</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="overviewCards"></div>
+                    <div class="mt-6">
+                        <h4 class="text-lg font-bold text-uticaNavy mb-3">Data Quality Summary Line</h4>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse text-sm" id="overviewQualityTable">
+                                <thead>
+                                    <tr class="bg-uticaNavy text-white">
+                                        <th class="p-3">Column Name</th>
+                                        <th class="p-3">Inferred Type</th>
+                                        <th class="p-3">Missing %</th>
+                                        <th class="p-3">Unique Count</th>
+                                        <th class="p-3">Quality Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: COLUMNS & DTYPES -->
+                <div id="tabColumns" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Column Data Type Inspector & Overrides</h3>
+                    <p class="text-sm text-gray-600">Review inferred types and generic assignments. You can override any data type manually and re-run calculations.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm" id="dtypesTable">
+                            <thead>
+                                <tr class="bg-uticaNavy text-white">
+                                    <th class="p-3">Name</th>
+                                    <th class="p-3">Inferred Dtype</th>
+                                    <th class="p-3">Override Dtype</th>
+                                    <th class="p-3">Generic Assignment</th>
+                                    <th class="p-3">Non-Null Count</th>
+                                    <th class="p-3">Missing Count (%)</th>
+                                    <th class="p-3">Unique Values</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB 3: MISSINGNESS -->
+                <div id="tabMissing" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Missingness Analysis & Overlap</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="font-bold text-gray-700 mb-2">Missing Values by Column</h4>
+                            <div class="h-64 relative"><canvas id="missingBarChart"></canvas></div>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-gray-700 mb-2">Missingness Correlation Insight</h4>
+                            <p class="text-sm text-gray-600 mb-4">Pairs of columns where missing values frequently appear together.</p>
+                            <div id="missingOverlapContainer" class="bg-gray-50 border rounded p-4 h-56 overflow-y-auto text-sm"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: DISTRIBUTIONS -->
+                <div id="tabDistributions" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Distributions & Summary Statistics</h3>
+                    <div id="distributionsContainer" class="space-y-8"></div>
+                </div>
+
+                <!-- TAB 5: OUTLIERS -->
+                <div id="tabOutliers" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Outlier Detection & Samples</h3>
+                    <p class="text-sm text-gray-600">Outliers flagged using selected threshold method across numerical columns.</p>
+                    <div id="outliersContainer" class="space-y-6"></div>
+                </div>
+
+                <!-- TAB 6: CORRELATIONS -->
+                <div id="tabCorrelations" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Pairwise Correlations</h3>
+                    <p class="text-sm text-gray-600">Correlation matrix for numeric columns.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-center border-collapse text-xs" id="correlationTable"></table>
+                    </div>
+                </div>
+
+                <!-- TAB 7: CLASS BALANCE -->
+                <div id="tabClassBalance" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Target Class Balance</h3>
+                    <div id="classBalanceContent">
+                        <p class="text-sm text-gray-500">Please select a Target Class Column in the configuration panel above to analyze class balance.</p>
+                    </div>
+                </div>
+
+                <!-- TAB 8: ANOMALIES -->
+                <div id="tabAnomalies" class="tab-pane hidden space-y-6">
+                    <h3 class="text-xl font-bold text-uticaNavy border-b pb-2">Automated Data-Quality Flags & Anomalies</h3>
+                    <div id="anomaliesContainer" class="space-y-3"></div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-uticaDark text-white py-6 mt-12 border-t border-gray-800 text-center text-xs">
+        <p class="text-gray-400 mt-1">securemind.org</p>
+    </footer>
+
+    <!-- Application Script Logic -->
+    <script>
+        let rawData = [];
+        let columns = [];
+        let dtypes = {};
+        let userOverrides = {};
+        let analysisResults = null;
+        let chartInstances = {};
+
+        const sampleCsv = `id,employee_name,department,salary,rating,hire_date,is_active,bonus
+1,Alice Smith,Engineering,92000,4.5,2021-03-15,true,5000
+2,Bob Jones,Marketing,64000,3.2,2019-07-11,true,1200
+3,Charlie Brown,Engineering,115000,4.8,2018-01-20,true,10000
+4,Diana Prince,HR,58000,3.9,2022-11-05,false,800
+5,Evan Wright,Sales,74000,2.8,2020-05-19,true,2000
+6,Fiona Gallagher,Engineering,,4.1,2023-01-10,true,3000
+7,George Clark,Marketing,62000,,2017-09-01,true,1500
+8,Hannah Abbott,Sales,81000,4.4,2021-06-30,true,4000
+9,Ian Malcolm,Research,130000,4.9,2015-08-12,true,12000
+10,Julia Roberts,HR,60000,3.5,2022-02-14,true,900
+11,Kevin Bacon,Sales,72000,3.0,2019-10-05,false,1500
+12,Laura Croft,Research,98000,4.6,2020-12-01,true,6000
+13,Michael Scott,Sales,45000,1.5,2011-04-01,true,100
+14,Pam Beesly,HR,52000,3.8,2013-06-15,true,500
+15,Jim Halpert,Sales,75000,4.0,2014-03-20,true,2500
+16,Dwight Schrute,Sales,85000,4.9,2012-01-10,true,7000
+17,Stanley Hudson,Sales,68000,3.1,2005-09-12,true,1200
+18,Phyllis Vance,Sales,65000,3.3,2006-10-01,true,1000
+19,Angela Martin,Accounting,70000,3.7,2007-05-15,true,2000
+20,Kevin Malone,Accounting,48000,2.1,2008-08-20,true,300`;
+
+        document.getElementById('loadSampleBtn').addEventListener('click', () => loadCsvData(sampleCsv, "Sample Employee Dataset"));
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        document.getElementById('recomputeBtn').addEventListener('click', runAnalysis);
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('border-uticaOrange', 'text-uticaNavy', 'font-bold');
+                    b.classList.add('text-gray-500', 'font-medium');
+                });
+                btn.classList.add('border-uticaOrange', 'text-uticaNavy', 'font-bold');
+                btn.classList.remove('text-gray-500', 'font-medium');
+
+                document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById(btn.dataset.target).classList.remove('hidden');
+            });
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => location.reload());
+        document.getElementById('exportHtmlBtn').addEventListener('click', exportStandaloneHtml);
+        document.getElementById('exportMarkdownBtn').addEventListener('click', exportMarkdownReport);
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            showLoading("Reading and parsing file...");
+
+            const filename = file.name.toLowerCase();
+            if (filename.endsWith('.csv') || filename.endsWith('.tsv') || filename.endsWith('.txt')) {
+                const reader = new FileReader();
+                reader.onload = (event) => loadCsvData(event.target.result, file.name);
+                reader.readAsText(file);
+            } else if (filename.endsWith('.json')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const json = JSON.parse(event.target.result);
+                        let arr = Array.isArray(json) ? json : (json.data || json.rows || []);
+                        loadArrayData(arr, file.name);
+                    } catch (err) {
+                        alert("Invalid JSON format: " + err.message);
+                        hideLoading();
+                    }
+                };
+                reader.readAsText(file);
+            } else if (filename.endsWith('.xlsx') || filename.endsWith('.xls')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const data = new Uint8Array(event.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.SheetNames[0];
+                        const json = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]);
+                        loadArrayData(json, file.name);
+                    } catch (err) {
+                        alert("Error parsing Excel file: " + err.message);
+                        hideLoading();
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert("Unsupported file format.");
+                hideLoading();
+            }
+        }
+
+        function loadCsvData(text, label) {
+            showLoading("Parsing CSV/TSV delimiters...");
+            Papa.parse(text, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                complete: (results) => loadArrayData(results.data, label),
+                error: (err) => {
+                    alert("Parse error: " + err.message);
+                    hideLoading();
+                }
+            });
+        }
+
+        function loadArrayData(arr, label) {
+            if (!arr || arr.length === 0) {
+                alert("Dataset is empty.");
+                hideLoading();
+                return;
+            }
+            rawData = arr;
+            columns = Object.keys(rawData[0]);
+            userOverrides = {};
+            
+            const targetSelect = document.getElementById('targetColumnSelect');
+            targetSelect.innerHTML = '<option value="">-- None (Unsupervised) --</option>';
+            columns.forEach(col => {
+                const opt = document.createElement('option');
+                opt.value = col;
+                opt.textContent = col;
+                targetSelect.appendChild(opt);
+            });
+
+            document.getElementById('datasetMetaLabel').textContent = `${label} (${rawData.length.toLocaleString()} rows, ${columns.length} columns)`;
+            document.getElementById('uploadSection').classList.add('hidden');
+            document.getElementById('configBar').classList.remove('hidden');
+            document.getElementById('resetBtn').classList.remove('hidden');
+
+            runAnalysis();
+        }
+
+        function showLoading(msg) {
+            document.getElementById('loadingText').textContent = msg;
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+            document.getElementById('reportDashboard').classList.add('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingIndicator').classList.add('hidden');
+            document.getElementById('reportDashboard').classList.remove('hidden');
+        }
+
+        function runAnalysis() {
+            showLoading("Computing statistical report & quality metrics...");
+            setTimeout(() => {
+                try {
+                    inferTypes();
+                    analysisResults = computeMetrics();
+                    renderReport();
+                    hideLoading();
+                } catch (err) {
+                    console.error(err);
+                    alert("Error during analysis: " + err.message);
+                    hideLoading();
+                }
+            }, 50);
+        }
+
+        function inferTypes() {
+            dtypes = {};
+            columns.forEach(col => {
+                if (userOverrides[col]) {
+                    dtypes[col] = userOverrides[col];
+                    return;
+                }
+                let nonNullValues = rawData.map(row => row[col]).filter(v => v !== null && v !== undefined && v !== '');
+                if (nonNullValues.length === 0) {
+                    dtypes[col] = 'text';
+                    return;
+                }
+
+                let allNumeric = nonNullValues.every(v => typeof v === 'number' && !isNaN(v));
+                if (allNumeric) {
+                    let allInt = nonNullValues.every(v => Number.isInteger(v));
+                    dtypes[col] = allInt ? 'integer' : 'numeric';
+                    return;
+                }
+
+                let allBoolean = nonNullValues.every(v => typeof v === 'boolean' || v === 'true' || v === 'false' || v === 0 || v === 1);
+                if (allBoolean && nonNullValues.length > 0) {
+                    dtypes[col] = 'boolean';
+                    return;
+                }
+
+                let dateCount = nonNullValues.filter(v => !isNaN(Date.parse(v)) && String(v).length > 4).length;
+                if (dateCount / nonNullValues.length > 0.8) {
+                    dtypes[col] = 'datetime';
+                    return;
+                }
+
+                let uniqueCount = new Set(nonNullValues).size;
+                if (uniqueCount / nonNullValues.length < 0.5 || uniqueCount < 20) {
+                    dtypes[col] = 'categorical';
+                } else {
+                    dtypes[col] = 'text';
+                }
+            });
+        }
+
+        function computeMetrics() {
+            const rowCount = rawData.length;
+            const colCount = columns.length;
+            
+            const serializedRows = rawData.map(r => JSON.stringify(r));
+            const uniqueRowsSet = new Set(serializedRows);
+            const duplicateCount = rowCount - uniqueRowsSet.size;
+            const duplicatePct = ((duplicateCount / rowCount) * 100).toFixed(1);
+
+            let colStats = {};
+            columns.forEach(col => {
+                let values = rawData.map(r => r[col]);
+                let nonNulls = values.filter(v => v !== null && v !== undefined && v !== '');
+                let missingCount = rowCount - nonNulls.length;
+                let missingPct = ((missingCount / rowCount) * 100).toFixed(1);
+                let uniqueSet = new Set(nonNulls);
+
+                let dtype = dtypes[col];
+                let generic = getGenericAssignment(dtype, uniqueSet.size, rowCount);
+
+                let statObj = {
+                    name: col,
+                    dtype: dtype,
+                    generic: generic,
+                    nonNullCount: nonNulls.length,
+                    missingCount: missingCount,
+                    missingPct: Number(missingPct),
+                    uniqueCount: uniqueSet.size
+                };
+
+                if (dtype === 'integer' || dtype === 'numeric') {
+                    let nums = nonNulls.map(Number).sort((a,b) => a - b);
+                    let sum = nums.reduce((a,b) => a + b, 0);
+                    let mean = nums.length ? sum / nums.length : 0;
+                    let median = nums.length ? (nums.length % 2 === 0 ? (nums[nums.length/2 - 1] + nums[nums.length/2])/2 : nums[Math.floor(nums.length/2)]) : 0;
+                    let min = nums.length ? nums[0] : 0;
+                    let max = nums.length ? nums[nums.length - 1] : 0;
+                    let std = Math.sqrt(nums.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / (nums.length || 1));
+                    
+                    let q25 = nums[Math.floor(nums.length * 0.25)] || min;
+                    let q75 = nums[Math.floor(nums.length * 0.75)] || max;
+
+                    statObj.numericStats = { mean, median, min, max, std, q25, q75, nums };
+                } else if (dtype === 'categorical' || dtype === 'boolean') {
+                    let counts = {};
+                    nonNulls.forEach(v => counts[v] = (counts[v] || 0) + 1);
+                    let sortedCats = Object.entries(counts).sort((a,b) => b[1] - a[1]);
+                    statObj.categoricalStats = sortedCats;
+                }
+                colStats[col] = statObj;
+            });
+
+            return { rowCount, colCount, duplicateCount, duplicatePct, colStats };
+        }
+
+        function getGenericAssignment(dtype, uniqueCount, rowCount) {
+            if (uniqueCount === rowCount && rowCount > 5) return 'identifier';
+            if (dtype === 'integer' || dtype === 'numeric') return 'numeric';
+            if (dtype === 'categorical' || dtype === 'boolean') return 'categorical';
+            if (dtype === 'datetime') return 'datetime';
+            return 'text';
+        }
+
+        function renderReport() {
+            renderOverview();
+            renderDtypesTable();
+            renderMissingness();
+            renderDistributions();
+            renderOutliers();
+            renderCorrelations();
+            renderClassBalance();
+            renderAnomalies();
+        }
+
+        function renderOverview() {
+            const container = document.getElementById('overviewCards');
+            container.innerHTML = `
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg shadow-sm">
+                    <p class="text-xs text-blue-600 font-bold uppercase">Total Rows</p>
+                    <p class="text-2xl font-black text-uticaNavy">${analysisResults.rowCount.toLocaleString()}</p>
+                </div>
+                <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg shadow-sm">
+                    <p class="text-xs text-blue-600 font-bold uppercase">Total Columns</p>
+                    <p class="text-2xl font-black text-uticaNavy">${analysisResults.colCount}</p>
+                </div>
+                <div class="bg-orange-50 border border-orange-200 p-4 rounded-lg shadow-sm">
+                    <p class="text-xs text-orange-600 font-bold uppercase">Duplicate Rows</p>
+                    <p class="text-2xl font-black text-uticaOrange">${analysisResults.duplicateCount.toLocaleString()} <span class="text-sm font-normal">(${analysisResults.duplicatePct}%)</span></p>
+                </div>
+                <div class="bg-gray-100 border border-gray-200 p-4 rounded-lg shadow-sm">
+                    <p class="text-xs text-gray-600 font-bold uppercase">Estimated Memory</p>
+                    <p class="text-2xl font-black text-gray-800">${(JSON.stringify(rawData).length / 1024).toFixed(1)} KB</p>
+                </div>
+            `;
+
+            const tbody = document.querySelector('#overviewQualityTable tbody');
+            tbody.innerHTML = '';
+            Object.values(analysisResults.colStats).forEach(st => {
+                let statusBadge = st.missingPct > 20 ? '<span class="bg-red-100 text-red-700 px-2 py-0.5 rounded text-xs font-bold">High Missing</span>' : '<span class="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">Healthy</span>';
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 font-semibold text-uticaNavy">${st.name}</td>
+                        <td class="p-3">${st.dtype}</td>
+                        <td class="p-3">${st.missingPct}%</td>
+                        <td class="p-3">${st.uniqueCount}</td>
+                        <td class="p-3">${statusBadge}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function renderDtypesTable() {
+            const tbody = document.querySelector('#dtypesTable tbody');
+            tbody.innerHTML = '';
+            columns.forEach(col => {
+                let st = analysisResults.colStats[col];
+                tbody.innerHTML += `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="p-3 font-semibold text-uticaNavy">${col}</td>
+                        <td class="p-3"><span class="bg-gray-200 text-gray-800 px-2 py-0.5 rounded text-xs">${st.dtype}</span></td>
+                        <td class="p-3">
+                            <select onchange="overrideDtype('${col}', this.value)" class="border rounded p-1 text-xs bg-white">
+                                <option value="" selected>-- Keep (${st.dtype}) --</option>
+                                <option value="numeric">numeric</option>
+                                <option value="integer">integer</option>
+                                <option value="categorical">categorical</option>
+                                <option value="datetime">datetime</option>
+                                <option value="text">text</option>
+                                <option value="boolean">boolean</option>
+                            </select>
+                        </td>
+                        <td class="p-3"><span class="text-xs font-bold text-uticaOrange uppercase">${st.generic}</span></td>
+                        <td class="p-3">${st.nonNullCount}</td>
+                        <td class="p-3">${st.missingCount} (${st.missingPct}%)</td>
+                        <td class="p-3">${st.uniqueCount}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function overrideDtype(col, newType) {
+            if (!newType) delete userOverrides[col];
+            else userOverrides[col] = newType;
+            runAnalysis();
+        }
+
+        function renderMissingness() {
+            const labels = columns;
+            const data = columns.map(c => analysisResults.colStats[c].missingPct);
+
+            if (chartInstances.missingBar) chartInstances.missingBar.destroy();
+            const ctx = document.getElementById('missingBarChart').getContext('2d');
+            chartInstances.missingBar = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Missing %',
+                        data: data,
+                        backgroundColor: '#E65300'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100 } }
+                }
+            });
+
+            const overlapContainer = document.getElementById('missingOverlapContainer');
+            overlapContainer.innerHTML = '';
+            let highMissingCols = columns.filter(c => analysisResults.colStats[c].missingPct > 0);
+            if (highMissingCols.length < 2) {
+                overlapContainer.innerHTML = '<p class="text-gray-500 italic">Not enough missing values across multiple columns to detect correlation overlap.</p>';
+            } else {
+                let html = '<ul class="space-y-2">';
+                for(let i=0; i<highMissingCols.length; i++) {
+                    for(let j=i+1; j<highMissingCols.length; j++) {
+                        html += `<li><i class="fa-solid fa-circle-exclamation text-uticaOrange mr-2"></i><strong>${highMissingCols[i]}</strong> & <strong>${highMissingCols[j]}</strong> show concurrent missing patterns.</li>`;
+                    }
+                }
+                html += '</ul>';
+                overlapContainer.innerHTML = html;
+            }
+        }
+
+        function renderDistributions() {
+            const container = document.getElementById('distributionsContainer');
+            container.innerHTML = '';
+
+            Object.values(analysisResults.colStats).forEach(st => {
+                if (st.dtype === 'integer' || st.dtype === 'numeric') {
+                    let ns = st.numericStats;
+                    container.innerHTML += `
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <h4 class="font-bold text-uticaNavy text-lg mb-2">${st.name} <span class="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Numeric</span></h4>
+                            <div class="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm mb-4">
+                                <div class="bg-white p-2 rounded border"><strong>Mean:</strong> ${ns.mean.toFixed(2)}</div>
+                                <div class="bg-white p-2 rounded border"><strong>Median:</strong> ${ns.median.toFixed(2)}</div>
+                                <div class="bg-white p-2 rounded border"><strong>Std Dev:</strong> ${ns.std.toFixed(2)}</div>
+                                <div class="bg-white p-2 rounded border"><strong>Min / Max:</strong> ${ns.min} / ${ns.max}</div>
+                                <div class="bg-white p-2 rounded border"><strong>Q1 / Q3:</strong> ${ns.q25} / ${ns.q75}</div>
+                                <div class="bg-white p-2 rounded border"><strong>Unique:</strong> ${st.uniqueCount}</div>
+                            </div>
+                        </div>
+                    `;
+                } else if (st.dtype === 'categorical' || st.dtype === 'boolean') {
+                    let topCats = st.categoricalStats.slice(0, 5);
+                    container.innerHTML += `
+                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <h4 class="font-bold text-uticaNavy text-lg mb-2">${st.name} <span class="text-xs font-normal bg-orange-100 text-orange-800 px-2 py-0.5 rounded">Categorical</span></h4>
+                            <div class="flex flex-wrap gap-2">
+                                ${topCats.map(([cat, cnt]) => `<div class="bg-white border px-3 py-1.5 rounded text-xs shadow-sm"><strong>${cat}:</strong> ${cnt} (${((cnt/st.nonNullCount)*100).toFixed(1)}%)</div>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        function renderOutliers() {
+            const container = document.getElementById('outliersContainer');
+            container.innerHTML = '';
+            const method = document.getElementById('outlierMethodSelect').value;
+
+            let foundOutliers = false;
+            Object.values(analysisResults.colStats).forEach(st => {
+                if (st.dtype === 'integer' || st.dtype === 'numeric') {
+                    let ns = st.numericStats;
+                    let outliers = [];
+                    if (method === 'iqr') {
+                        let iqr = ns.q75 - ns.q25;
+                        let lowerBound = ns.q25 - 1.5 * iqr;
+                        let upperBound = ns.q75 + 1.5 * iqr;
+                        outliers = ns.nums.filter(v => v < lowerBound || v > upperBound);
+                    } else {
+                        outliers = ns.nums.filter(v => Math.abs((v - ns.mean) / (ns.std || 1)) > 3.0);
+                    }
+
+                    if (outliers.length > 0) {
+                        foundOutliers = true;
+                        container.innerHTML += `
+                            <div class="bg-gray-50 border p-4 rounded-lg">
+                                <h4 class="font-bold text-uticaNavy">${st.name} <span class="text-xs text-red-600 font-semibold">(${outliers.length} outliers detected)</span></h4>
+                                <p class="text-xs text-gray-600 mt-1">Sample outliers: ${outliers.slice(0, 10).join(', ')}</p>
+                            </div>
+                        `;
+                    }
+                }
+            });
+
+            if (!foundOutliers) {
+                container.innerHTML = '<p class="text-gray-500 italic">No significant outliers detected using current threshold parameters.</p>';
+            }
+        }
+
+        function renderCorrelations() {
+            const numCols = columns.filter(c => analysisResults.colStats[c].dtype === 'integer' || analysisResults.colStats[c].dtype === 'numeric');
+            const table = document.getElementById('correlationTable');
+            table.innerHTML = '';
+
+            if (numCols.length < 2) {
+                table.innerHTML = '<tr><td class="p-4 text-gray-500 italic">At least 2 numeric columns are required to generate a correlation matrix.</td></tr>';
+                return;
+            }
+
+            let headerHtml = '<tr class="bg-uticaNavy text-white"><th class="p-2 border">Column</th>';
+            numCols.forEach(c => headerHtml += `<th class="p-2 border">${c}</th>`);
+            headerHtml += '</tr>';
+            table.innerHTML += headerHtml;
+
+            numCols.forEach(c1 => {
+                let rowHtml = `<tr class="border-b"><td class="p-2 font-bold bg-gray-100 border">${c1}</td>`;
+                numCols.forEach(c2 => {
+                    let val = computePearson(c1, c2);
+                    let colorBg = val > 0.7 ? 'bg-orange-100 text-orange-900 font-bold' : (val < -0.7 ? 'bg-blue-100 text-blue-900 font-bold' : '');
+                    rowHtml += `<td class="p-2 border ${colorBg}">${val.toFixed(2)}</td>`;
+                });
+                rowHtml += '</tr>';
+                table.innerHTML += rowHtml;
+            });
+        }
+
+        function computePearson(c1, c2) {
+            let vals1 = rawData.map(r => Number(r[c1])).filter(v => !isNaN(v));
+            let vals2 = rawData.map(r => Number(r[c2])).filter(v => !isNaN(v));
+            let n = Math.min(vals1.length, vals2.length);
+            if (n === 0) return 0;
+
+            let mean1 = vals1.reduce((a,b)=>a+b,0)/n;
+            let mean2 = vals2.reduce((a,b)=>a+b,0)/n;
+
+            let num = 0, den1 = 0, den2 = 0;
+            for(let i=0; i<n; i++) {
+                let diff1 = vals1[i] - mean1;
+                let diff2 = vals2[i] - mean2;
+                num += diff1 * diff2;
+                den1 += diff1 * diff1;
+                den2 += diff2 * diff2;
+            }
+            let den = Math.sqrt(den1 * den2);
+            return den === 0 ? 0 : num / den;
+        }
+
+        function renderClassBalance() {
+            const targetCol = document.getElementById('targetColumnSelect').value;
+            const container = document.getElementById('classBalanceContent');
+
+            if (!targetCol) {
+                container.innerHTML = '<p class="text-gray-500 italic">Please select a Target Class Column in the configuration panel above and click "Apply Settings".</p>';
+                return;
+            }
+
+            let st = analysisResults.colStats[targetCol];
+            if (!st.categoricalStats) {
+                container.innerHTML = `<p class="text-red-600">Selected target column '${targetCol}' is not categorical or discrete.</p>`;
+                return;
+            }
+
+            let total = st.nonNullCount;
+            let maxCount = st.categoricalStats[0][1];
+            let minCount = st.categoricalStats[st.categoricalStats.length - 1][1];
+            let imbalanceRatio = (maxCount / (minCount || 1)).toFixed(2);
+            let isImbalanced = imbalanceRatio > 3.0;
+
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="p-4 rounded border ${isImbalanced ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}">
+                        <p class="font-bold ${isImbalanced ? 'text-red-800' : 'text-green-800'}">
+                            ${isImbalanced ? '<i class="fa-solid fa-triangle-exclamation mr-2"></i>Class Imbalance Warning (Ratio: ' + imbalanceRatio + ':1)' : '<i class="fa-solid fa-circle-check mr-2"></i>Class Distribution Appears Balanced'}
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${st.categoricalStats.map(([cat, cnt]) => `
+                            <div class="bg-gray-50 p-3 rounded border flex justify-between items-center">
+                                <span class="font-semibold text-uticaNavy">${cat}</span>
+                                <span class="text-sm bg-white px-2.5 py-1 rounded border shadow-sm">${cnt} records (${((cnt/total)*100).toFixed(1)}%)</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderAnomalies() {
+            const container = document.getElementById('anomaliesContainer');
+            container.innerHTML = '';
+            let flags = [];
+
+            Object.values(analysisResults.colStats).forEach(st => {
+                if (st.uniqueCount === 1) {
+                    flags.push({ type: 'Constant Column', msg: `Column <strong>${st.name}</strong> contains only 1 unique value.` });
+                }
+                if (st.missingPct > 50) {
+                    flags.push({ type: 'High Missingness', msg: `Column <strong>${st.name}</strong> is over 50% missing (${st.missingPct}%).` });
+                }
+                if (st.dtype === 'text' && st.uniqueCount === analysisResults.rowCount) {
+                    flags.push({ type: 'Identifier Candidate', msg: `Column <strong>${st.name}</strong> has 100% unique values (likely a primary key or ID).` });
+                }
+            });
+
+            if (analysisResults.duplicateCount > 0) {
+                flags.push({ type: 'Duplicate Rows', msg: `Dataset contains ${analysisResults.duplicateCount} duplicate row entries (${analysisResults.duplicatePct}%).` });
+            }
+
+            if (flags.length === 0) {
+                container.innerHTML = '<p class="text-green-600 font-semibold"><i class="fa-solid fa-check-circle mr-2"></i>No major data quality anomalies detected.</p>';
+            } else {
+                container.innerHTML = flags.map(f => `
+                    <div class="bg-orange-50 border-l-4 border-uticaOrange p-4 rounded shadow-sm">
+                        <span class="text-xs font-bold text-uticaOrange uppercase">${f.type}</span>
+                        <p class="text-sm text-gray-800 mt-1">${f.msg}</p>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function exportStandaloneHtml() {
+            let colRowsHtml = '';
+            columns.forEach(c => {
+                let st = analysisResults.colStats[c];
+                colRowsHtml += '<tr style="border-bottom: 1px solid #ddd;"><td style="padding: 8px;">' + st.name + '</td><td style="padding: 8px;">' + st.dtype + '</td><td style="padding: 8px;">' + st.missingPct + '%</td><td style="padding: 8px;">' + st.uniqueCount + '</td></tr>';
+            });
+
+            let anomalyHtml = '';
+            let anomalyFlags = [];
+            Object.values(analysisResults.colStats).forEach(st => {
+                if (st.uniqueCount === 1) anomalyFlags.push('Column <strong>' + st.name + '</strong> is constant.');
+                if (st.missingPct > 50) anomalyFlags.push('Column <strong>' + st.name + '</strong> is over 50% missing.');
+            });
+            if (anomalyFlags.length === 0) anomalyHtml = '<p>No major anomalies detected.</p>';
+            else anomalyHtml = '<ul>' + anomalyFlags.map(f => '<li>' + f + '</li>').join('') + '</ul>';
+
+            const htmlContent = '<!DOCTYPE html>\n' +
+                '<html lang="en">\n' +
+                '<head><meta charset="UTF-8"><title>PioneerData Inspector Report</title></head>\n' +
+                '<body style="font-family: sans-serif; padding: 32px; background-color: #f9fafb; color: #111827;">\n' +
+                '    <div style="max-width: 900px; margin: auto; background: white; padding: 32px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">\n' +
+                '        <h1 style="color: #0A2240; font-size: 24px; margin-bottom: 8px;">PioneerData Inspector Report</h1>\n' +
+                '        <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Generated via Utica University Utility • Rows: ' + analysisResults.rowCount + ', Columns: ' + analysisResults.colCount + '</p>\n' +
+                '        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;">\n' +
+                '        \n' +
+                '        <h2 style="color: #0A2240; font-size: 18px; margin-top: 24px; margin-bottom: 12px;">1. Overview Summary</h2>\n' +
+                '        <p style="font-size: 14px;">Total Rows: <strong>' + analysisResults.rowCount + '</strong> | Total Columns: <strong>' + analysisResults.colCount + '</strong> | Duplicate Rows: <strong>' + analysisResults.duplicateCount + ' (' + analysisResults.duplicatePct + '%)</strong></p>\n' +
+                '        \n' +
+                '        <h2 style="color: #0A2240; font-size: 18px; margin-top: 24px; margin-bottom: 12px;">2. Column Summaries & Dtypes</h2>\n' +
+                '        <table style="width: 100%; border-collapse: collapse; font-size: 14px; text-align: left;">\n' +
+                '            <tr style="background-color: #0A2240; color: white;"><th style="padding: 8px;">Name</th><th style="padding: 8px;">Dtype</th><th style="padding: 8px;">Missing %</th><th style="padding: 8px;">Unique</th></tr>\n' +
+                '            ' + colRowsHtml + '\n' +
+                '        </table>\n' +
+                '        \n' +
+                '        <h2 style="color: #0A2240; font-size: 18px; margin-top: 24px; margin-bottom: 12px;">3. Data Quality & Anomalies</h2>\n' +
+                '        <div style="font-size: 14px;">' + anomalyHtml + '</div>\n' +
+                '    </div>\n' +
+                '</body>\n' +
+                '</html>';
+            downloadFile(htmlContent, 'pioneer_data_report.html', 'text/html');
+        }
+
+        function exportMarkdownReport() {
+            let md = '# PioneerData Inspector Report\n\n';
+            md += '* **Total Rows:** ' + analysisResults.rowCount + '\n';
+            md += '* **Total Columns:** ' + analysisResults.colCount + '\n';
+            md += '* **Duplicate Rows:** ' + analysisResults.duplicateCount + ' (' + analysisResults.duplicatePct + '%)\n\n';
+            md += '## Column Summaries\n\n';
+            md += '| Column | Dtype | Missing % | Unique Count |\n|---|---|---|---|\n';
+            columns.forEach(c => {
+                let st = analysisResults.colStats[c];
+                md += '| ' + st.name + ' | ' + st.dtype + ' | ' + st.missingPct + '% | ' + st.uniqueCount + ' |\n';
+            });
+            downloadFile(md, 'pioneer_data_report.md', 'text/markdown');
+        }
+
+        function downloadFile(content, filename, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
